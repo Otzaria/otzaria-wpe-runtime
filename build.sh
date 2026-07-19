@@ -49,6 +49,14 @@ WEBKIT_SRC="${SRC_DIR}/wpewebkit-${WPE_WEBKIT_VERSION}"
 
 # ---- תלויות בנייה: רשימת ה-apt הרשמית והמתוחזקת של WebKit עצמו ----
 # בטוח יותר מלנחש חבילות-dev ידנית; מותקנות גם תלויות של כלים שלא נבנה — זניח.
+# ה-tarball הרשמי של WPE לא כולל Tools/glib, אך dependencies/apt של WPE
+# מפנה אליו (רשימת הבסיס המשותפת ל-GTK/WPE) — שולפים אותו מה-tag התואם.
+GLIB_DEPS="${WEBKIT_SRC}/Tools/glib/dependencies/apt"
+if [ ! -f "${GLIB_DEPS}" ]; then
+    mkdir -p "$(dirname "${GLIB_DEPS}")"
+    curl -fSL -o "${GLIB_DEPS}" \
+        "https://raw.githubusercontent.com/WebKit/WebKit/wpewebkit-${WPE_WEBKIT_VERSION}/Tools/glib/dependencies/apt"
+fi
 "${WEBKIT_SRC}/Tools/wpe/install-dependencies"
 
 # ---- ccache ----
