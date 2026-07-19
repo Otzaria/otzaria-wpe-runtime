@@ -84,8 +84,9 @@ ninja -C _build
 ninja -C _build install
 
 # ---- 2) WPE WebKit (cmake/ninja) ----
-# DEVELOPER_MODE נדרש עבור WEBKIT_EXEC_PATH, אך כלי ה-clangd שהוא מפעיל כברירת
-# מחדל אינו נדרש ל-runtime והסקריפטים שלו אינם כלולים ב-tarball הרשמי של WPE.
+# DEVELOPER_MODE נדרש עבור WEBKIT_EXEC_PATH, אך הוא מדליק CMAKE_EXPORT_COMPILE_COMMANDS
+# שיוצר חוקי clangd התלויים ב-Tools/clangd — סקריפטים שאינם כלולים ב-tarball הרשמי.
+# CLANGD_AUTO_SETUP=OFF לבדו לא מספיק — חובה לכבות את ה-export עצמו.
 echo "==> configuring WPE WebKit"
 cd "${WEBKIT_SRC}"
 cmake -S . -B _build -G Ninja \
@@ -94,6 +95,7 @@ cmake -S . -B _build -G Ninja \
     -DCMAKE_INSTALL_PREFIX="${PREFIX}" \
     -DLIB_INSTALL_DIR="${PREFIX}/lib" \
     -DDEVELOPER_MODE=ON \
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=OFF \
     -DCLANGD_AUTO_SETUP=OFF \
     -DENABLE_WPE_PLATFORM=ON \
     -DENABLE_WPE_PLATFORM_HEADLESS=ON \
