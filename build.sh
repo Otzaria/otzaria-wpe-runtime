@@ -59,6 +59,12 @@ if [ ! -f "${GLIB_DEPS}" ]; then
 fi
 "${WEBKIT_SRC}/Tools/wpe/install-dependencies"
 
+# ---- DEVELOPER_MODE מוסיף add_subdirectory(flatpak) ו-add_subdirectory(PerformanceTests) ----
+# שני התיקיות האלה חסרות ב-tarball הרשמי של WPE (לא נחוצות לבנייה עצמה) —
+# placeholder ריק מספיק כדי ש-CMake לא ייכשל.
+mkdir -p "${WEBKIT_SRC}/Tools/flatpak" "${WEBKIT_SRC}/PerformanceTests"
+touch "${WEBKIT_SRC}/Tools/flatpak/CMakeLists.txt" "${WEBKIT_SRC}/PerformanceTests/CMakeLists.txt"
+
 # ---- ccache ----
 export PATH="/usr/lib/ccache:${PATH}"
 export CCACHE_DIR="${CCACHE_DIR:-/ccache}"
