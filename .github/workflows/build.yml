@@ -1,0 +1,96 @@
+name: build-wpe-runtime
+
+# בונה WPE WebKit + libwpe פעם אחת ומפרסם tarball של SDK+runtime.
+# הפעלה ידנית (עם בחירת גרסה) או דחיפת tag בתבנית wpe-*.
+on:
+  workflow_dispatch:
+    inputs:
+      wpe_version:
+        description: "WPE WebKit version"
+        required: true
+        default: "2.48.7"
+      wpe_sha256:
+        description: "sha256 של wpewebkit-<ver>.tar.xz"
+        required: true
+        default: "cecf49844dfba7ccf53d64b32cb8cf2cbd69eb5ec9080b1c6e52f9d1ee87b690"
+      libwpe_version:
+        description: "libwpe version"
+        required: true
+        default: "1.16.3"
+      libwpe_sha256:
+        description: "sha256 של libwpe-<ver>.tar.xz"
+        required: true
+        default: "c880fa8d607b2aa6eadde7d6d6302b1396ebc38368fe2332fa20e193c7ee1420"
+  push:
+    tags:
+      - "wpe-*"
+
+permissions:
+  contents: write   # נדרש ליצירת release על tag
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    # רצפת תאימות רחבה להפצה: glibc 2.36 של bookworm.
+    container:
+      image: debian:bookworm
+    timeout-minutes: 350   # מתחת ל-360 (מגבלת ה-job) כדי לאפשר שמירת ccache
+    env:
+      WPE_WEBKIT_VERSION: ${{ github.event.inputs.wpe_version || '2.48.7' }}
+      WPE_WEBKIT_SHA256: ${{ github.event.inputs.wpe_sha256 || 'cecf49844dfba7ccf53d64b32cb8cf2cbd69eb5ec9080b1c6e52f9d1ee87b690' }}
+      LIBWPE_VERSION: ${{ github.event.inputs.libwpe_version || '1.16.3' }}
+      LIBWPE_SHA256: ${{ github.event.inputs.libwpe_sha256 || 'c880fa8d607b2aa6eadde7d6d6302b1396ebc38368fe2332fa20e193c7ee1420' }}
+      PREFIX: /opt/wpe-sdk
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: "6G"
+      NINJA_TIMEOUT: "320m"   # עוצר ninja בחן לפני מגבלת ה-job; ריצה חוזרת ממשיכה
+    steps:
+      - name: הכנת הקונטיינר (לפני checkout)
+        run: |
+          set -eux
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates git curl xz-utils zstd sudo file
+
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: מטמון ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.ccache
+          # מפתח ייחודי לכל ריצה => תמיד נשמר מטמון חדש; restore מושך את האחרון.
+          key: wpe-ccache-${{ env.WPE_WEBKIT_VERSION }}-${{ github.run_id }}
+          restore-keys: |
+            wpe-ccache-${{ env.WPE_WEBKIT_VERSION }}-
+            wpe-ccache-
+
+      - name: בנייה
+        run: bash build.sh
+
+      - name: אריזת ה-SDK ל-tar.zst
+        run: |
+          set -eux
+          out="wpe-runtime-${WPE_WEBKIT_VERSION}-linux-x86_64.tar.zst"
+          tar -C "$(dirname "${PREFIX}")" -I 'zstd -19 -T0' \
+            -cf "${GITHUB_WORKSPACE}/${out}" "$(basename "${PREFIX}")"
+          ( cd "${GITHUB_WORKSPACE}" && sha256sum "${out}" | tee "${out}.sha256" )
+          echo "ARTIFACT=${out}" >> "${GITHUB_ENV}"
+
+      - name: העלאת artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT }}
+          path: |
+            ${{ github.workspace }}/${{ env.ARTIFACT }}
+            ${{ github.workspace }}/${{ env.ARTIFACT }}.sha256
+          retention-days: 30
+
+      - name: release (רק על tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ github.workspace }}/${{ env.ARTIFACT }}
+            ${{ github.workspace }}/${{ env.ARTIFACT }}.sha256
