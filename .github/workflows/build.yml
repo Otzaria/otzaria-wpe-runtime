@@ -45,6 +45,16 @@ jobs:
       CCACHE_MAXSIZE: "6G"
       NINJA_TIMEOUT: "320m"   # עוצר ninja בחן לפני מגבלת ה-job; ריצה חוזרת ממשיכה
     steps:
+      # tag שלא תואם את גרסת ברירת המחדל יפרסם asset בשם שגוי — עוצרים מוקדם.
+      - name: אימות התאמה בין ה-tag לגרסה
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          expected="wpe-${WPE_WEBKIT_VERSION}"
+          if [ "${GITHUB_REF_NAME}" != "${expected}" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match WPE_WEBKIT_VERSION (expected ${expected}); update the workflow defaults before tagging"
+            exit 1
+          fi
+
       - name: הכנת הקונטיינר (לפני checkout)
         run: |
           set -eux
