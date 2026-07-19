@@ -55,6 +55,10 @@ IndexedDB, canvas, OffscreenCanvas, WebGL דרך תהליך ה-GPU, WebAssembly,
 Service Workers). **מדיה (GStreamer)** נשארת דלוקה כברירת המחדל של WPE — זהו
 מרכיב זמן הבנייה המשמעותי ביותר, וניתן לכבותו בעתיד אם יידרש קיצוץ.
 
+שימו לב: פלאגיני GStreamer נטענים ב-`dlopen` ולכן **אינם נארזים** בסגירת
+ה-`ldd` של הצרכן — וידאו/אודיו ב-WebView יעבדו רק אם GStreamer מותקן במארח.
+ליבת הגלישה אינה תלויה בכך.
+
 ## מבנה הריפו
 
 ```
@@ -84,11 +88,10 @@ build.sh                    # כל לוגיקת הבנייה (רץ גם מקומ
    export PKG_CONFIG_PATH=/opt/wpe-sdk/lib/pkgconfig:$PKG_CONFIG_PATH
    export LD_LIBRARY_PATH=/opt/wpe-sdk/lib:$LD_LIBRARY_PATH
    ```
-3. באריזה/בזמן ריצה של האפליקציה, הפנו את תהליכי העזר לנתיב שבו נארזו:
-   ```bash
-   export WEBKIT_EXEC_PATH=/path/to/bundle/libexec/wpe-webkit-2.0
-   ```
-   (התיקייה שמכילה את `WPEWebProcess` / `WPENetworkProcess`).
+3. באריזה/בזמן ריצה של האפליקציה, הפנו את `WEBKIT_EXEC_PATH` לתיקייה שאליה
+   נארזו `WPEWebProcess` / `WPENetworkProcess`. ב-Otzaria זה קורה אוטומטית:
+   ה-fork של flutter_inappwebview משטח אותם ל-`lib/` של ה-bundle ומגדיר את
+   המשתנה בעצמו בזמן ריצה.
 
 ## זמן בנייה וסיכונים
 
