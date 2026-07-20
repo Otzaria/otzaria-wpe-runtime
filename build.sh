@@ -117,6 +117,21 @@ cmake -S . -B _build -G Ninja \
     -DENABLE_SPEECH_SYNTHESIS=OFF \
     -DENABLE_JSC_RESTRICTED_OPTIONS_BY_DEFAULT=OFF
 
+# ---- יצירת ה-bindings עד הסוף לפני הקומפילציה ----
+# ב-WPE 2.48.7 קובץ JS<partial>.cpp (stub ריק של partial interface, שם עם '+')
+# נרשם כמקור לקומפילציה אך מדי פעם לא נוצר, והבנייה נכשלת על "No such file".
+# מייצרים את כל ה-bindings, ואז משלימים stub ריק לכל partial שחסר — בדיוק התוכן
+# ש-GenerateEmptyHeaderAndCpp כותב עבור partial (הקובץ נטול קוד ממילא).
+echo "==> generating WebCore bindings"
+ninja -C _build WebCoreBindings WebCoreTestSupportBindings
+_ds="_build/WebCore/DerivedSources"
+while IFS= read -r _idl; do
+    _js="${_ds}/JS$(basename "${_idl}" .idl)"
+    for _f in "${_js}.cpp" "${_js}.h"; do
+        [ -f "${_f}" ] || printf '/* generated empty stub for partial interface */\n' > "${_f}"
+    done
+done < <(find Source/WebCore -name '*+*.idl')
+
 echo "==> building WPE WebKit"
 if [ -n "${NINJA_TIMEOUT}" ]; then
     set +e
