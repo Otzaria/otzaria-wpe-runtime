@@ -66,11 +66,14 @@ mkdir -p "${WEBKIT_SRC}/Tools/flatpak" "${WEBKIT_SRC}/PerformanceTests"
 touch "${WEBKIT_SRC}/Tools/flatpak/CMakeLists.txt" "${WEBKIT_SRC}/PerformanceTests/CMakeLists.txt"
 
 # ---- ccache ----
+# רק דרך masquerade (סימלינקים ב-PATH). אסור CC="ccache gcc" דו-מילתי:
+# ה-preprocessor של ה-IDL מריץ "$CXX -E" ומקבל "ccache -E" → כל קבצי ה-JS
+# bindings יוצאים ריקים והקומפילציה נופלת על "No such file".
 export PATH="/usr/lib/ccache:${PATH}"
 export CCACHE_DIR="${CCACHE_DIR:-/ccache}"
 ccache --max-size="${CCACHE_MAXSIZE:-6G}" >/dev/null 2>&1 || true
 ccache -z >/dev/null 2>&1 || true
-export CC="ccache gcc" CXX="ccache g++"
+unset CC CXX
 
 export PKG_CONFIG_PATH="${PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
 export LD_LIBRARY_PATH="${PREFIX}/lib:${LD_LIBRARY_PATH:-}"
