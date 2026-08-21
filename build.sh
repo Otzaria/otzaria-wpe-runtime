@@ -66,6 +66,7 @@ fi
 #
 # Newer WebKit uses GBM_BO_IMPORT_FD_MODIFIER and passes the plane FDs,
 # strides, offsets and modifier. Backport that behavior to 2.48.7.
+cd "${WEBKIT_SRC}"
 echo "==> applying DMA-BUF modifier import backport"
 
 python3 <<'PY'
