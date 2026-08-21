@@ -35,7 +35,7 @@ apt-get install -y --no-install-recommends \
 cd "${SRC_DIR}"
 fetch() { # out url sha
     local out="$1" url="$2" sha="$3"
-    [ -f "${out}" ] || curl -fSL --retry 3 --retry-delay 5 -o "${out}" "${URL}"
+    [ -f "${out}" ] || curl -fSL --retry 3 --retry-delay 5 -o "${out}" "${url}"
     echo "${sha}  ${out}" | sha256sum -c -
 }
 fetch "libwpe-${LIBWPE_VERSION}.tar.xz"     "${DOWNLOAD_BASE}/libwpe-${LIBWPE_VERSION}.tar.xz"     "${LIBWPE_SHA256}"
@@ -73,6 +73,9 @@ from pathlib import Path
 
 path = Path("Source/WebKit/WPEPlatform/wpe/WPEBufferDMABuf.cpp")
 text = path.read_text()
+
+old_format_check = "        if (priv->format != DRM_FORMAT_ARGB8888 && priv->format != DRM_FORMAT_XRGB8888 && priv->modifier != DRM_FORMAT_MOD_LINEAR && priv->modifier != DRM_FORMAT_MOD_INVALID) {"
+new_format_check = "        if (priv->format != DRM_FORMAT_ARGB8888 && priv->format != DRM_FORMAT_XRGB8888) {"
 
 old = """        struct gbm_import_fd_data fdData = { priv->fds[0].value(), width, height, priv->strides[0], priv->format };
         priv->bufferObject = gbm_bo_import(priv->device.value(), GBM_BO_IMPORT_FD, &fdData, GBM_BO_USE_RENDERING | GBM_BO_USE_LINEAR);
@@ -112,11 +115,14 @@ new = """        uint32_t planeCount = static_cast<uint32_t>(priv->fds.size());
         }"""
 
 count = text.count(old)
-if count != 1:
+format_check_count = text.count(old_format_check)
+if count != 1 or format_check_count != 1:
     raise SystemExit(
-        f"Expected exactly one WPE 2.48.7 DMA-BUF import block, found {count}"
+        "Expected exactly one WPE 2.48.7 import block and format check, "
+        f"found import={count}, format_check={format_check_count}"
     )
 
+text = text.replace(old_format_check, new_format_check, 1)
 path.write_text(text.replace(old, new, 1))
 
 print("DMA-BUF modifier backport applied successfully")
