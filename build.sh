@@ -59,6 +59,80 @@ if [ ! -f "${GLIB_DEPS}" ]; then
 fi
 "${WEBKIT_SRC}/Tools/wpe/install-dependencies"
 
+# ---- Backport: preserve DMA-BUF modifiers when importing to GBM ----
+# WPE WebKit 2.48.7 imports DMA-BUFs with GBM_BO_IMPORT_FD, which drops
+# multi-plane layout information and DRM modifiers. On modern Intel GPUs
+# this can make WebView frames render as corrupted vertical stripes.
+#
+# Newer WebKit uses GBM_BO_IMPORT_FD_MODIFIER and passes the plane FDs,
+# strides, offsets and modifier. Backport that behavior to 2.48.7.
+echo "==> applying DMA-BUF modifier import backport"
+
+python3 <<'PY'
+from pathlib import Path
+
+path = Path("Source/WebKit/WPEPlatform/wpe/WPEBufferDMABuf.cpp")
+text = path.read_text()
+
+old_format_check = "        if (priv->format != DRM_FORMAT_ARGB8888 && priv->format != DRM_FORMAT_XRGB8888 && priv->modifier != DRM_FORMAT_MOD_LINEAR && priv->modifier != DRM_FORMAT_MOD_INVALID) {"
+new_format_check = "        if (priv->format != DRM_FORMAT_ARGB8888 && priv->format != DRM_FORMAT_XRGB8888) {"
+
+old = """        struct gbm_import_fd_data fdData = { priv->fds[0].value(), width, height, priv->strides[0], priv->format };
+        priv->bufferObject = gbm_bo_import(priv->device.value(), GBM_BO_IMPORT_FD, &fdData, GBM_BO_USE_RENDERING | GBM_BO_USE_LINEAR);
+        if (!priv->bufferObject) {
+            g_set_error_literal(error, WPE_BUFFER_ERROR, WPE_BUFFER_ERROR_IMPORT_FAILED, "Failed to import buffer to pixels_buffer: gbm_bo_import failed");
+            return nullptr;
+        }"""
+
+new = """        uint32_t planeCount = static_cast<uint32_t>(priv->fds.size());
+        struct gbm_import_fd_modifier_data fdModifierData = {
+            width,
+            height,
+            priv->format,
+            planeCount, {
+                priv->fds[0].value(),
+                planeCount > 1 ? priv->fds[1].value() : -1,
+                planeCount > 2 ? priv->fds[2].value() : -1,
+                planeCount > 3 ? priv->fds[3].value() : -1
+            }, {
+                static_cast<int>(priv->strides[0]),
+                planeCount > 1 ? static_cast<int>(priv->strides[1]) : 0,
+                planeCount > 2 ? static_cast<int>(priv->strides[2]) : 0,
+                planeCount > 3 ? static_cast<int>(priv->strides[3]) : 0
+            }, {
+                static_cast<int>(priv->offsets[0]),
+                planeCount > 1 ? static_cast<int>(priv->offsets[1]) : 0,
+                planeCount > 2 ? static_cast<int>(priv->offsets[2]) : 0,
+                planeCount > 3 ? static_cast<int>(priv->offsets[3]) : 0
+            },
+            priv->modifier
+        };
+
+        priv->bufferObject = gbm_bo_import(priv->device.value(), GBM_BO_IMPORT_FD_MODIFIER, &fdModifierData, 0);
+        if (!priv->bufferObject) {
+            g_set_error_literal(error, WPE_BUFFER_ERROR, WPE_BUFFER_ERROR_IMPORT_FAILED, "Failed to import buffer to pixels_buffer: gbm_bo_import failed");
+            return nullptr;
+        }"""
+
+count = text.count(old)
+format_check_count = text.count(old_format_check)
+if count != 1 or format_check_count != 1:
+    raise SystemExit(
+        "Expected exactly one WPE 2.48.7 import block and format check, "
+        f"found import={count}, format_check={format_check_count}"
+    )
+
+text = text.replace(old_format_check, new_format_check, 1)
+path.write_text(text.replace(old, new, 1))
+
+print("DMA-BUF modifier backport applied successfully")
+PY
+
+grep -q 'GBM_BO_IMPORT_FD_MODIFIER' \
+    "${WEBKIT_SRC}/Source/WebKit/WPEPlatform/wpe/WPEBufferDMABuf.cpp" || {
+    echo "ERROR: DMA-BUF modifier backport was not applied" >&2
+    exit 1
+}
 # ---- DEVELOPER_MODE מוסיף add_subdirectory(flatpak) ו-add_subdirectory(PerformanceTests) ----
 # שני התיקיות האלה חסרות ב-tarball הרשמי של WPE (לא נחוצות לבנייה עצמה) —
 # placeholder ריק מספיק כדי ש-CMake לא ייכשל.
