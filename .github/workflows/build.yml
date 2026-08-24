@@ -1,7 +1,7 @@
 name: build-wpe-runtime
 
-# בונה WPE WebKit + libwpe פעם אחת ומפרסם tarball של SDK+runtime.
-# הפעלה ידנית (עם בחירת גרסה) או דחיפת tag בתבנית wpe-*.
+# בונה WPE WebKit + libwpe פעם אחת ומפרסם tarball של SDK+runtime לכל ארכיטקטורה.
+# הפעלה ידנית (עם בחירת גרסה/ארכיטקטורות/יעד פרסום) או דחיפת tag בתבנית wpe-*.
 on:
   workflow_dispatch:
     inputs:
@@ -21,6 +21,14 @@ on:
         description: "sha256 של libwpe-<ver>.tar.xz"
         required: true
         default: "c880fa8d607b2aa6eadde7d6d6302b1396ebc38368fe2332fa20e193c7ee1420"
+      arches:
+        description: 'ארכיטקטורות לבנייה (JSON), למשל ["aarch64"]'
+        required: false
+        default: '["x86_64","aarch64"]'
+      release_tag:
+        description: "tag של release קיים לצירוף הנכסים (ריק = ללא פרסום)"
+        required: false
+        default: ""
   push:
     tags:
       - "wpe-*"
@@ -30,7 +38,11 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: ${{ fromJSON(github.event.inputs.arches || '["x86_64","aarch64"]') }}
+    runs-on: ${{ matrix.arch == 'aarch64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     # רצפת תאימות רחבה להפצה: glibc 2.36 של bookworm.
     container:
       image: debian:bookworm
@@ -71,10 +83,11 @@ jobs:
         with:
           path: ${{ github.workspace }}/.ccache
           # מפתח ייחודי לכל ריצה => תמיד נשמר מטמון חדש; restore מושך את האחרון.
-          key: wpe-ccache-${{ env.WPE_WEBKIT_VERSION }}-${{ github.run_id }}
+          # הארכיטקטורה במפתח — אחרת מטמון של ארכיטקטורה אחת דורס את השנייה.
+          key: wpe-ccache-${{ matrix.arch }}-${{ env.WPE_WEBKIT_VERSION }}-${{ github.run_id }}
           restore-keys: |
-            wpe-ccache-${{ env.WPE_WEBKIT_VERSION }}-
-            wpe-ccache-
+            wpe-ccache-${{ matrix.arch }}-${{ env.WPE_WEBKIT_VERSION }}-
+            wpe-ccache-${{ matrix.arch }}-
 
       - name: בנייה
         run: bash build.sh
@@ -82,7 +95,7 @@ jobs:
       - name: אריזת ה-SDK ל-tar.zst
         run: |
           set -eux
-          out="wpe-runtime-${WPE_WEBKIT_VERSION}-linux-x86_64.tar.zst"
+          out="wpe-runtime-${WPE_WEBKIT_VERSION}-linux-${{ matrix.arch }}.tar.zst"
           tar -C "$(dirname "${PREFIX}")" -I 'zstd -19 -T0' \
             -cf "${GITHUB_WORKSPACE}/${out}" "$(basename "${PREFIX}")"
           ( cd "${GITHUB_WORKSPACE}" && sha256sum "${out}" | tee "${out}.sha256" )
@@ -97,10 +110,11 @@ jobs:
             ${{ github.workspace }}/${{ env.ARTIFACT }}.sha256
           retention-days: 30
 
-      - name: release (רק על tag)
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: release (על tag, או dispatch עם release_tag)
+        if: startsWith(github.ref, 'refs/tags/') || github.event.inputs.release_tag != ''
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.event.inputs.release_tag || github.ref_name }}
           files: |
             ${{ github.workspace }}/${{ env.ARTIFACT }}
             ${{ github.workspace }}/${{ env.ARTIFACT }}.sha256
