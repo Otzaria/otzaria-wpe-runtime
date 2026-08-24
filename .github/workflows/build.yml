@@ -101,13 +101,15 @@ jobs:
           ( cd "${GITHUB_WORKSPACE}" && sha256sum "${out}" | tee "${out}.sha256" )
           echo "ARTIFACT=${out}" >> "${GITHUB_ENV}"
 
+      # ב-job בתוך container תרגום נתיבי host↔container חל רק על תחילת ערך ה-input,
+      # כך ששורה שנייה אבסולוטית לא נמצאת (ה-sha256 נשמט) — לכן נתיבים יחסיים בלבד.
       - name: העלאת artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.ARTIFACT }}
           path: |
-            ${{ github.workspace }}/${{ env.ARTIFACT }}
-            ${{ github.workspace }}/${{ env.ARTIFACT }}.sha256
+            ${{ env.ARTIFACT }}
+            ${{ env.ARTIFACT }}.sha256
           retention-days: 30
 
       - name: release (על tag, או dispatch עם release_tag)
@@ -116,5 +118,5 @@ jobs:
         with:
           tag_name: ${{ github.event.inputs.release_tag || github.ref_name }}
           files: |
-            ${{ github.workspace }}/${{ env.ARTIFACT }}
-            ${{ github.workspace }}/${{ env.ARTIFACT }}.sha256
+            ${{ env.ARTIFACT }}
+            ${{ env.ARTIFACT }}.sha256
