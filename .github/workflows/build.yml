@@ -73,7 +73,7 @@ jobs:
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
           apt-get install -y --no-install-recommends \
-            ca-certificates git curl xz-utils zstd sudo file
+            ca-certificates git curl xz-utils zstd sudo file jq
 
       - name: checkout
         uses: actions/checkout@v4
@@ -112,11 +112,34 @@ jobs:
             ${{ env.ARTIFACT }}.sha256
           retention-days: 30
 
+      # softprops@v2 נכשל אקראית ("fetching release for tag refs/heads/main" למרות
+      # tag_name תקין) — פרסום ישיר מול ה-API אמין ושקוף.
       - name: release (על tag, או dispatch עם release_tag)
         if: startsWith(github.ref, 'refs/tags/') || github.event.inputs.release_tag != ''
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.event.inputs.release_tag || github.ref_name }}
-          files: |
-            ${{ env.ARTIFACT }}
-            ${{ env.ARTIFACT }}.sha256
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.event.inputs.release_tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}"
+          hdr=(-H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json")
+          get_rid() { curl -fsS "${hdr[@]}" "${api}/releases/tags/${RELEASE_TAG}" | jq -r .id; }
+          rid=$(get_rid || true)
+          if [ -z "${rid:-}" ] || [ "${rid}" = "null" ]; then
+            # שני jobs של ה-matrix עלולים ליצור במקביל — כשל יצירה נפתר בשליפה חוזרת.
+            curl -sS "${hdr[@]}" -X POST "${api}/releases" \
+              -d "{\"tag_name\":\"${RELEASE_TAG}\",\"name\":\"${RELEASE_TAG}\"}" >/dev/null || true
+            rid=$(get_rid)
+          fi
+          for f in "${ARTIFACT}" "${ARTIFACT}.sha256"; do
+            aid=$(curl -fsS "${hdr[@]}" "${api}/releases/${rid}/assets?per_page=100" \
+              | jq -r --arg n "$f" '.[] | select(.name==$n) | .id')
+            if [ -n "${aid}" ]; then
+              echo "replacing existing asset ${f} (id=${aid})"
+              curl -fsS "${hdr[@]}" -X DELETE "${api}/releases/assets/${aid}"
+            fi
+            curl -fsS "${hdr[@]}" -H "Content-Type: application/octet-stream" \
+              --data-binary @"${f}" \
+              "https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${rid}/assets?name=${f}" >/dev/null
+            echo "uploaded ${f}"
+          done
