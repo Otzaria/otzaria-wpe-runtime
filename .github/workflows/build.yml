@@ -45,7 +45,7 @@ jobs:
     runs-on: ${{ matrix.arch == 'aarch64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     # רצפת תאימות רחבה להפצה: glibc 2.36 של bookworm.
     container:
-      image: debian:bookworm
+      image: debian:trixie
     timeout-minutes: 350   # מתחת ל-360 (מגבלת ה-job) כדי לאפשר שמירת ccache
     env:
       WPE_WEBKIT_VERSION: ${{ github.event.inputs.wpe_version || '2.48.7' }}
