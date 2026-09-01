@@ -76,7 +76,7 @@ jobs:
             ca-certificates git curl xz-utils zstd sudo file jq
 
       - name: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: מטמון ccache
         uses: actions/cache@v4
