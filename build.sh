@@ -8,6 +8,9 @@
 #
 set -euo pipefail
 
+# חובה לפני כל cd — ב-CI הסקריפט מופעל בנתיב יחסי
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # ---- גרסאות (ניתן לעקוף דרך משתני סביבה מה-workflow) ----
 WPE_WEBKIT_VERSION="${WPE_WEBKIT_VERSION:-2.48.7}"
 WPE_WEBKIT_SHA256="${WPE_WEBKIT_SHA256:-cecf49844dfba7ccf53d64b32cb8cf2cbd69eb5ec9080b1c6e52f9d1ee87b690}"
@@ -136,7 +139,6 @@ grep -q 'GBM_BO_IMPORT_FD_MODIFIER' \
 }
 
 # ---- Patch: print-to-PDF ל-WPE (ui.exportPdf של תוספי אוצריא בלינוקס) ----
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "==> applying print-to-pdf patch"
 python3 "${SCRIPT_DIR}/patches/print-to-pdf/apply.py" "${WEBKIT_SRC}"
 
