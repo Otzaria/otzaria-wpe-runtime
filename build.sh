@@ -134,6 +134,17 @@ grep -q 'GBM_BO_IMPORT_FD_MODIFIER' \
     echo "ERROR: DMA-BUF modifier backport was not applied" >&2
     exit 1
 }
+
+# ---- Patch: print-to-PDF ל-WPE (ui.exportPdf של תוספי אוצריא בלינוקס) ----
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+echo "==> applying print-to-pdf patch"
+python3 "${SCRIPT_DIR}/patches/print-to-pdf/apply.py" "${WEBKIT_SRC}"
+
+grep -q 'webkit_otzaria_web_view_print_to_pdf' \
+    "${WEBKIT_SRC}/Source/WebKit/UIProcess/API/wpe/WebKitOtzariaPrint.cpp" || {
+    echo "ERROR: print-to-pdf patch was not applied" >&2
+    exit 1
+}
 # ---- DEVELOPER_MODE מוסיף add_subdirectory(flatpak) ו-add_subdirectory(PerformanceTests) ----
 # שני התיקיות האלה חסרות ב-tarball הרשמי של WPE (לא נחוצות לבנייה עצמה) —
 # placeholder ריק מספיק כדי ש-CMake לא ייכשל.
