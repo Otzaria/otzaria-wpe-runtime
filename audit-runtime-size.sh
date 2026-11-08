@@ -17,11 +17,12 @@ while IFS= read -r -d '' file; do
   before="$(stat -c%s "$file")"
   copy="$tmp/elf"
   cp "$file" "$copy"
-  if strip --strip-unneeded "$copy" >/dev/null 2>&1; then
-    after="$(stat -c%s "$copy")"
-  else
-    after="$before"
+  # A failed strip is a broken measurement, not a zero-byte saving.
+  if ! strip --strip-unneeded "$copy" >/dev/null 2>&1; then
+    echo "strip failed for $rel" >&2
+    exit 3
   fi
+  after="$(stat -c%s "$copy")"
   savings=$((before - after))
   printf '%s\t%s\t%s\t%s\n' "$before" "$after" "$savings" "$rel" >> "$rows"
 done < <(find "$ROOT" -type f -print0)
