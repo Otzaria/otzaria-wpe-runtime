@@ -26,7 +26,7 @@ jobs:
             sha256: ca7e706c0ec2f66623fede2c369e3e13339448843e125f2ccd1553f4a3c4bcaf
           - arch: aarch64
             sha256: d59f7c7a00d2d15370afc805dfa3a2e017c04833320805f5299989865913dc3d
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.arch == 'aarch64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -48,7 +48,7 @@ jobs:
         shell: bash
         run: |
           bash audit-runtime-size.sh "$RUNNER_TEMP/sdk/wpe-sdk" | tee "$RUNNER_TEMP/wpe-size-${{ matrix.arch }}.tsv"
-          grep -q $'^potential_savings_bytes\\t' "$RUNNER_TEMP/wpe-size-${{ matrix.arch }}.tsv"
+          grep -q '^potential_savings_bytes[[:space:]]' "$RUNNER_TEMP/wpe-size-${{ matrix.arch }}.tsv"
       - uses: actions/upload-artifact@v4
         with:
           name: wpe-runtime-size-${{ matrix.arch }}
