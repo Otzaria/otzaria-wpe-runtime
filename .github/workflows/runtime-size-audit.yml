@@ -23,8 +23,10 @@ jobs:
       matrix:
         include:
           - arch: x86_64
+            asset_id: 540161229
             sha256: ca7e706c0ec2f66623fede2c369e3e13339448843e125f2ccd1553f4a3c4bcaf
           - arch: aarch64
+            asset_id: 540319689
             sha256: d59f7c7a00d2d15370afc805dfa3a2e017c04833320805f5299989865913dc3d
     runs-on: ${{ matrix.arch == 'aarch64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     timeout-minutes: 15
@@ -36,11 +38,16 @@ jobs:
         run: sudo apt-get update -qq && sudo apt-get install -y -qq binutils zstd
       - name: Download checksum-pinned published SDK
         shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           asset="wpe-runtime-2.48.7-linux-${{ matrix.arch }}.tar.zst"
-          url="https://github.com/Otzaria/otzaria-wpe-runtime/releases/download/wpe-2.48.7-print-to-pdf/$asset"
-          curl --fail --location --retry 3 --max-time 300 "$url" -o "$RUNNER_TEMP/$asset"
+          url="https://api.github.com/repos/Otzaria/otzaria-wpe-runtime/releases/assets/${{ matrix.asset_id }}"
+          curl --fail --location --retry 8 --retry-all-errors --retry-delay 3 --max-time 300 \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/octet-stream" \
+            "$url" -o "$RUNNER_TEMP/$asset"
           printf '%s  %s\n' '${{ matrix.sha256 }}' "$RUNNER_TEMP/$asset" | sha256sum --check -
           mkdir -p "$RUNNER_TEMP/sdk"
           tar -C "$RUNNER_TEMP/sdk" -I zstd -xf "$RUNNER_TEMP/$asset"
