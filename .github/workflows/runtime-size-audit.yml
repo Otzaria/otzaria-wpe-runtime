@@ -1,0 +1,57 @@
+name: WPE runtime size audit
+
+on:
+  push:
+    branches:
+      - 'palmoni5/wpe-runtime-size-audit-*'
+    paths:
+      - 'audit-runtime-size.sh'
+      - '.github/workflows/runtime-size-audit.yml'
+  pull_request:
+    paths:
+      - 'audit-runtime-size.sh'
+      - '.github/workflows/runtime-size-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            sha256: ca7e706c0ec2f66623fede2c369e3e13339448843e125f2ccd1553f4a3c4bcaf
+          - arch: aarch64
+            sha256: d59f7c7a00d2d15370afc805dfa3a2e017c04833320805f5299989865913dc3d
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install audit tools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq binutils zstd
+      - name: Download checksum-pinned published SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          asset="wpe-runtime-2.48.7-linux-${{ matrix.arch }}.tar.zst"
+          url="https://github.com/Otzaria/otzaria-wpe-runtime/releases/download/wpe-2.48.7-print-to-pdf/$asset"
+          curl --fail --location --retry 3 --max-time 300 "$url" -o "$RUNNER_TEMP/$asset"
+          printf '%s  %s\n' '${{ matrix.sha256 }}' "$RUNNER_TEMP/$asset" | sha256sum --check -
+          mkdir -p "$RUNNER_TEMP/sdk"
+          tar -C "$RUNNER_TEMP/sdk" -I zstd -xf "$RUNNER_TEMP/$asset"
+      - name: Measure ELF strip opportunity without modifying the SDK
+        shell: bash
+        run: |
+          bash audit-runtime-size.sh "$RUNNER_TEMP/sdk/wpe-sdk" | tee "$RUNNER_TEMP/wpe-size-${{ matrix.arch }}.tsv"
+          grep -q $'^potential_savings_bytes\\t' "$RUNNER_TEMP/wpe-size-${{ matrix.arch }}.tsv"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wpe-runtime-size-${{ matrix.arch }}
+          path: ${{ runner.temp }}/wpe-size-${{ matrix.arch }}.tsv
+          if-no-files-found: error
+          retention-days: 30
